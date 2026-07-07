@@ -10,6 +10,21 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import os
 
+from langchain_core.callbacks import BaseCallbackHandler
+
+
+class _AgentThoughtHandler(BaseCallbackHandler):
+    """只打印 Agent 的关键思考步骤"""
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        pass  # 不打印原始的 prompt
+
+    def on_agent_action(self, action, **kwargs):
+        print(f"  🛠️ 调用工具: {action.tool}")
+        print(f"     参数: {action.tool_input}")
+
+    def on_agent_finish(self, finish, **kwargs):
+        print(f"  ✅ 最终答案: {finish.return_values['output']}")
 
 async def run(user_input: str, history: list | None = None) -> tuple[str, list]:
     """
@@ -26,7 +41,8 @@ async def run(user_input: str, history: list | None = None) -> tuple[str, list]:
             model=os.getenv("LLM_MODEL", "deepseek-v4-flash"),
             temperature=0.3,
         )
-
+        # debug=True 会把 LangGraph 的全部内部状态切换都吐出来，调试用
+        # agent = create_react_agent(llm, tools, version="v2", debug= True)
         agent = create_react_agent(llm, tools, version="v2")
 
         lc_messages = []
@@ -45,7 +61,12 @@ async def run(user_input: str, history: list | None = None) -> tuple[str, list]:
 
         lc_messages.append(HumanMessage(content=user_input))
 
-        result = await agent.ainvoke({"messages": lc_messages})
+        # 自定义回调处理器
+        handler = _AgentThoughtHandler()
+        result = await agent.ainvoke(
+            {"messages": lc_messages},
+            config={"callbacks": [handler]} # 自定义 Callback，只打印 Agent 思考过程
+        )
 
         all_msgs = result["messages"]
         answer = all_msgs[-1].content
