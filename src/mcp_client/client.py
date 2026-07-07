@@ -1,14 +1,9 @@
-"""
-    MCPilot — MCP 客户端主入口 (stdio 模式)
-    启动 stdin/stdout 的 MCP 客户端，等服务端发 JSON-RPC 请求过来，
-    路由到 tools/client.py 里注册好的 list_tools 和 call_tool 处理
-"""
-import os, sys
+"""MCPilot — MCP 客户端主入口 (stdio 模式)"""
+import sys
 from pathlib import Path
 
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client, StdioServerParameters
-from src.utils.logger_handler import logger
 from contextlib import AsyncExitStack
 
 
@@ -54,17 +49,3 @@ class MCPClient:
         result = await self._session.call_tool(name, arguments or {})
         texts = [item.text for item in result.content if hasattr(item, "text")]
         return "\n".join(texts) if texts else "(无返回内容)"
-
-    def to_openai_tools(self, mcptools: list):
-        """将 MCP Tool 定义转换为 OpenAI Function Calling 格式"""
-        openai_tools = []
-        for tool in mcptools:
-            openai_tools.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "parameters": tool.inputSchema,
-                },
-            })
-        return openai_tools
