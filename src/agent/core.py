@@ -138,7 +138,7 @@ async def run(user_input: str, history: list | None = None) -> tuple[str, list]:
                 messages=messages,
                 tools=tools,
                 tool_choice = "auto", # 让 LLM 自己决定调不调工具
-                # max_tokens=512,
+                max_tokens=1024,
                 # max_iterations=5,
             )
 

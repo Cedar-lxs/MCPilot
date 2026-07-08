@@ -84,3 +84,23 @@ INFO:     Started server process [21152]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 WARNING:  WatchFiles detected changes in 'src\rag\embeddings.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21152]
+WARNING:  WatchFiles detected changes in 'src\mcp_server\tools\server.py', 'utils\logger_handler.py', 'src\rag\embeddings.py', 'src\utils\logger_handler.py', 'src\rag\chunk.py', 'test_rag_agent.py', 'check_models.py', 'src\rag\rag.py', 'src\mcp_server\tools\rag_tool.py', 'test_rag_full.py', 'src\mcp_server\rag_tool.py', 'test_rag.py', 'src\rag\vector_store.py'. Reloading...
+INFO:     Started server process [40928]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [40928]
+INFO:     Started server process [21888]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'src\agent\prompt.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
+INFO:     Waiting for background tasks to complete. (CTRL+C to force quit)
