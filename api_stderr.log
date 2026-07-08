@@ -9,3 +9,78 @@ INFO:     Started server process [29608]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 WARNING:  WatchFiles detected changes in 'test.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [29608]
+D:\python3.13.9\Lib\site-packages\langgraph\checkpoint\serde\encrypted.py:5: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.
+  from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+INFO:     Started server process [37772]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'src\rag\__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [37772]
+WARNING:  WatchFiles detected changes in 'src\rag\__init__.py', 'src\mcp_server\tools\server.py', 'src\mcp_server\tools\__init__.py', 'utils\logger_handler.py', 'src\rag\embeddings.py', 'src\utils\logger_handler.py', 'src\rag\ingest.py', 'src\mcp_server\tools\calculator.py', 'src\mcp_server\tools\web_serach.py', 'src\mcp_server\tools\rag.py', 'src\agent\core.py', 'src\rag\document_loader.py', 'src\mcp_server\__init__.py', 'src\mcp_server\tools\note.py', 'src\mcp_client\__init__.py', 'src\utils\path_tool.py', 'src\agent\__init__.py', 'ui\app.py', 'src\mcp_client\client.py', 'src\__init__.py', 'src\api\app.py', 'src\mcp_server\server.py', 'src\rag\vector_store.py', 'src\agent\prompt.py'. Reloading...
+INFO:     Started server process [18576]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18576]
+INFO:     Started server process [14900]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'src\rag\__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [14900]
+WARNING:  WatchFiles detected changes in 'src\rag\embeddings.py'. Reloading...
+INFO:     Started server process [35412]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [35412]
+INFO:     Started server process [36356]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'src\rag\embeddings.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [36356]
+WARNING:  WatchFiles detected changes in 'src\rag\embeddings.py'. Reloading...
+INFO:     Started server process [10680]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [10680]
+INFO:     Started server process [35544]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'src\rag\embeddings.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [35544]
+WARNING:  WatchFiles detected changes in 'src\rag\embeddings.py'. Reloading...
+INFO:     Started server process [30692]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [30692]
+INFO:     Started server process [21152]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'src\rag\embeddings.py'. Reloading...

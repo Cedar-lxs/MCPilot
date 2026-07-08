@@ -46,5 +46,7 @@ def get_logger(
 
         logger.addHandler(file_handler)
 
+    return logger
+
 # 快捷获取日志管理器
 logger = get_logger()

@@ -1,21 +1,6 @@
-# 环境变量
-.env
-
-# Python
+docs/
 __pycache__/
 *.pyc
-*.pyo
-
-# 日志
-src/logs/
-
-# 临时文件
-test.py
-
-# IDE
-.vscode/
-.idea/
-
-# 系统
-Thumbs.db
-.DS_Store
+*.log
+chroma_data/
+.env
