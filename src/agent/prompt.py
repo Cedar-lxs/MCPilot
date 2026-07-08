@@ -13,6 +13,9 @@ SYSTEM_PROMPT = """
 3. **web_search** — 搜索互联网获取实时信息
    使用方法：web_search(query="搜索关键词")
 
+4. **rag_query** — 从本地知识库检索信息，当问题涉及项目文档、知识库内容时使用
+   使用方法：rag_query(question="用户的问题")
+
 
 ### 工作流程
 

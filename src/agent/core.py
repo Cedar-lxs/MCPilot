@@ -138,6 +138,8 @@ async def run(user_input: str, history: list | None = None) -> tuple[str, list]:
                 messages=messages,
                 tools=tools,
                 tool_choice = "auto", # 让 LLM 自己决定调不调工具
+                # max_tokens=512,
+                # max_iterations=5,
             )
 
             message = response.choices[0].message
@@ -145,8 +147,8 @@ async def run(user_input: str, history: list | None = None) -> tuple[str, list]:
             # 情况1: LLM需要调工具
             if message.tool_calls:
 
-                print(f"🤔 思考过程: {message.content}")
-                print(f"🔧 调用的工具: {[tc.function.name for tc in message.tool_calls]}")
+                # print(f"🤔 思考过程: {message.content}")
+                # print(f"🔧 调用的工具: {[tc.function.name for tc in message.tool_calls]}")
 
                 if message.content is None or message.content == "":
                 # DeepSeek 调工具时 content 可能为空，给个占位文本

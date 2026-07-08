@@ -31,19 +31,37 @@ async def embed_texts(text: List[str]) -> List[List[float]]:
     # 拼出完整的API URL
     url = f"{BASE_URL.rstrip('/')}/embeddings"
 
-    # 发POST请求，带上API Key和模型名
+
+    # 一次全部发送所有向量化文本，导致超限
+    # async with httpx.AsyncClient(timeout=30) as client:
+    #     resp = await client.post(url, json={"input": text, ...})
+    #     resp.raise_for_status()
+    #     data = resp.json()
+    #     return [item["embedding"] for item in data["data"]]
+
+
+    # 分批发送，每批最多 5 个文本（避免超出 API 限制）
+    batch_size = 5
+    all_embeddings = []
+
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            url,
-            json = {
-                "model": EMBEDDING_MODEL,
-                "input": text,
-            },
-            headers = {
-                "Authorization": f"Bearer {API_KEY}",
-                "Content-Type": "application/json",
-            }
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return [item["embedding"] for item in data["data"]]
+        for i in range(0, len(text), batch_size):
+            batch = text[i : i + batch_size]
+            resp = await client.post(
+                url,
+                json={
+                    "model": EMBEDDING_MODEL,
+                    "input": batch,
+                },
+                headers={
+                    "Authorization": f"Bearer {API_KEY}",
+                    "Content-Type": "application/json",
+                }
+            )
+            if resp.status_code != 200:
+                logger.error(f"Embedding API 错误 ({resp.status_code}): {resp.text[:300]}")
+                resp.raise_for_status()
+            data = resp.json()
+            all_embeddings.extend(item["embedding"] for item in data["data"])
+
+    return all_embeddings

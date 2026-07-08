@@ -1,4 +1,4 @@
-# server.py - MCPilot MCP Server
+﻿# server.py - MCPilot MCP Server
 import sys
 from pathlib import Path
 
@@ -14,13 +14,14 @@ from src.utils.logger_handler import logger
 from .calculator import Calculator
 from .note import NoteTool
 from .web_serach import WebSearchTool
+from .rag_tool import RagTool
 
 # 创建MCP实例
 app = Server("MCPilot")
 
 
 # 工具注册列表：加新工具在这里加一行
-_TOOLS: list = [Calculator(), NoteTool(), WebSearchTool()]
+_TOOLS: list = [Calculator(), NoteTool(), WebSearchTool(), RagTool()]
 
 
 @app.list_tools()

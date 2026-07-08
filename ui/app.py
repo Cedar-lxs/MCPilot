@@ -33,7 +33,7 @@ if prompt := st.chat_input("说点什么..."):
                 response = httpx.post(f"{API_URL}/chat", json= {
                     "message": prompt,
                     "history": st.session_state.history
-                }, timeout = 120)
+                }, timeout = 180)
                 data = response.json()
                 answer = data["answer"]
                 st.session_state.history = data["history"]
