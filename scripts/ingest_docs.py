@@ -20,10 +20,13 @@ async def main():
         return
 
     for md_file in md_files:
-        print(f"正在导入: {md_file.name}...")
-        text = md_file.read_text(encoding="utf-8")
-        ids = await store.add_texts([text])
-        print(f"  → 已存入 {len(ids)} 个文本块")
+        try:
+            print(f"正在导入: {md_file.name}...")
+            text = md_file.read_text(encoding="utf-8")
+            ids = await store.add_texts([text], source=md_file.name)
+            print(f"  → 已存入 {len(ids)} 个文本块")
+        except Exception as e:
+            print(f"  ❌ 导入失败: {e}")
 
     print(f"\n导入完成！共处理 {len(md_files)} 个文件")
 

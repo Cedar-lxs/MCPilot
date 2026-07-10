@@ -55,10 +55,13 @@ pip install -r requirements.txt
 |--------|------|
 | `OPENAI_API_KEY` | LLM API Key（如 DeepSeek） |
 | `OPENAI_BASE_URL` | LLM API 地址 |
-| `LLM_MODEL` | 对话模型名 |
+| `LLM_MODEL` | 对话模型名（如 deepseek-v4-flash） |
 | `EMBEDDING_API_KEY` | Embedding API Key（如 DashScope） |
 | `EMBEDDING_BASE_URL` | Embedding API 地址 |
 | `EMBEDDING_MODEL` | Embedding 模型名 |
+| `LLM_MAX_TOKENS` | 单次回答最大 token 数（默认 4096） |
+| `MAX_ITERATIONS` | Agent 最大推理循环步数（默认 10） |
+| `AGENT_TEMPERATURE` | LLM 温度参数（默认 0.3） |
 
 ### 3. 启动
 

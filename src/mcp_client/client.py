@@ -3,8 +3,7 @@
     启动 stdin/stdout 的 MCP 客户端，等服务端发 JSON-RPC 请求过来，
     路由到 tools/client.py 里注册好的 list_tools 和 call_tool 处理
 """
-import os, sys
-from pathlib import Path
+import sys
 
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client, StdioServerParameters
@@ -13,14 +12,22 @@ from contextlib import AsyncExitStack
 
 
 class MCPClient:
-    """通过 stdio 连接 MCP Server，动态发现和调用工具"""
+    """通过 stdio 连接 MCP Server，动态发现和调用工具
+
+    支持两种用法：
+    1. 上下文管理器:  async with MCPClient() as mcp: ...
+    2. 手动生命周期:  await mcp.connect() / await mcp.close()
+    """
 
     def __init__(self):
         self._session = None
         self._exit_stack = AsyncExitStack()
+        self._connected = False
 
-    async def __aenter__(self):
-        """启动 MCP Server 子进程 → 建立 stdio 连接 → 初始化会话"""
+    async def connect(self):
+        """显式连接 MCP Server（可替代 __aenter__）"""
+        if self._connected:
+            return self
         server_params = StdioServerParameters(
             command=sys.executable,
             args=["-m", "src.mcp_server.server"],
@@ -35,10 +42,21 @@ class MCPClient:
             ClientSession(read_stream, write_stream)
         )
         await self._session.initialize()
+        self._connected = True
         return self
 
+    async def close(self):
+        """显式断开连接（可替代 __aexit__）"""
+        if self._connected:
+            await self._exit_stack.aclose()
+            self._connected = False
+            self._session = None
+
+    async def __aenter__(self):
+        return await self.connect()
+
     async def __aexit__(self, *args):
-        await self._exit_stack.aclose()
+        await self.close()
 
     async def list_tools(self):
         """获取 MCP Server 注册的所有工具"""

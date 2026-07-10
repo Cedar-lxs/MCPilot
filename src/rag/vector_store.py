@@ -23,7 +23,7 @@ class VectorStore:
         # 获取或创建集合（Collection ≈ 一张表）
         self.collection = self.client.get_or_create_collection(name=collection_name)
 
-    async def add_texts(self, texts: list[str]) -> list[str]:
+    async def add_texts(self, texts: list[str], source: str = "") -> list[str]:
         """添加文本到向量库（自动分块 + 向量化 + 存储）"""
         # 1. 每条文本先切块
         all_chunks : list[str] = []
@@ -47,6 +47,7 @@ class VectorStore:
             ids=ids,
             embeddings=embeddings,
             documents=all_chunks,
+            metadatas=[{"source": source}] * len(ids)
         )
 
         logger.info(f"已存入 {len(ids)} 个文本块")

@@ -4,7 +4,8 @@ from src.utils.logger_handler import logger
 class NoteTool:
     """临时笔记工具--Agent用来记录中间信息"""
 
-    _store: dict[str, str] = {}
+    def __init__(self):
+        self._store: dict[str, str] = {}
 
     def get_definition(self) -> dict:
         return {
@@ -47,7 +48,7 @@ class NoteTool:
                 return f"read操作需要 key"
             val = self._store.get(key)
             if val is None:
-                return f"笔记:[{val}]不存在"
+                return f"笔记 [{key}] 不存在"
             return f"笔记: {key}: {val}"
         
         elif action == "list":

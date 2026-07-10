@@ -1,4 +1,4 @@
-﻿# server.py - MCPilot MCP Server
+# server.py - MCPilot MCP Server
 import sys
 from pathlib import Path
 
@@ -13,7 +13,7 @@ import asyncio
 from src.utils.logger_handler import logger
 from .calculator import Calculator
 from .note import NoteTool
-from .web_serach import WebSearchTool
+from .web_search import WebSearchTool
 from .rag_tool import RagTool
 
 # 创建MCP实例

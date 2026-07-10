@@ -1,6 +1,7 @@
-docs/
 __pycache__/
 *.pyc
 *.log
 chroma_data/
 .env
+api_stdout.log
+api_stderr.log

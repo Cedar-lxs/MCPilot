@@ -30,17 +30,17 @@ class Calculator():
 
     async def execute(self, expression: str) -> str:
         """安全执行数学表达式"""
-        #安全检查
+        # 安全检查 — 不通过直接返回，不执行 eval
         if not self.ALLOWED_PATTERN.match(expression):
-            logger.error(f"表达式:{expression}包含不允许的字符，仅支持数字和 + - * / ( ) %")
-            # raise ValueError("表达式包含不允许的字符，仅支持数字和 + - * / ( ) %")
+            logger.error(f"表达式包含不允许的字符: {expression}")
+            return f"错误：表达式包含不允许的字符，仅支持数字和 + - * / ( ) %"
+
         try:
             # eval 但限制命名空间，只暴露 math 模块
             # 这样用户只能调 math 里的函数（如 math.sqrt），调不了 os、sys 等
             result = eval(expression, {"__builtins__": {}}, {"math": math})
             return f"{expression} = {result}"
         except Exception as e:
-            logger.error(f"[calculator execute]计算错误,原因{str(e)}")
-            # raise ValueError(f"计算错误: {e}")
-            raise e
+            logger.error(f"[calculator execute]计算错误: {e}")
+            return f"计算错误: {e}"
             
