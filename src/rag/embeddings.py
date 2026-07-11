@@ -25,9 +25,12 @@ async def embed_texts(text: List[str]) -> List[List[float]]:
     """
     # 检查API_KEY有没有配置
     if not API_KEY:
-        logger.error(f"OPENAI_API_KEY 未配置")
-        raise ValueError("OPENAI_API_KEY 未配置")
-    
+        logger.error("EMBEDDING_API_KEY 未配置")
+        raise ValueError("EMBEDDING_API_KEY 未配置")
+    if not BASE_URL:
+        logger.error("EMBEDDING_BASE_URL 未配置")
+        raise ValueError("EMBEDDING_BASE_URL 未配置")
+
     # 拼出完整的API URL
     url = f"{BASE_URL.rstrip('/')}/embeddings"
 

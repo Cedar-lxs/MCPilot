@@ -1,6 +1,5 @@
 import json
 import os
-from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
@@ -20,6 +19,30 @@ MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash")
 MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "10"))
 TEMPERATURE = float(os.getenv("AGENT_TEMPERATURE", "0.3"))
+
+
+def _assistant_message_to_dict(message) -> dict:
+    """把 SDK ChatCompletionMessage 转成可 JSON 序列化的 dict"""
+    content = message.content
+    if message.tool_calls and not content:
+        # DeepSeek 调工具时 content 可能为空，给个占位文本
+        names = [tc.function.name for tc in message.tool_calls]
+        content = f"我需要调用 {names} 来获取信息"
+
+    data = {"role": "assistant", "content": content}
+    if message.tool_calls:
+        data["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in message.tool_calls
+        ]
+    return data
 
 
 async def run(
@@ -69,23 +92,30 @@ async def run(
                 logger.error(f"LLM API 调用失败: {e}")
                 return f"LLM API 调用失败: {e}", messages
 
+            if not response.choices:
+                logger.error("LLM 返回空 choices")
+                return "LLM 返回空响应", messages
+
             message = response.choices[0].message
 
             # 情况1: LLM 需要调工具
             if message.tool_calls:
-                # DeepSeek 调工具时 content 可能为空，给个占位文本
-                if not message.content:
-                    message.content = (
-                        f"我需要调用 "
-                        f"{[tc.function.name for tc in message.tool_calls]}"
-                        f" 来获取信息"
-                    )
-
-                messages.append(message)
+                messages.append(_assistant_message_to_dict(message))
 
                 for tc in message.tool_calls:
                     tool_name = tc.function.name
-                    tool_args = json.loads(tc.function.arguments)
+                    try:
+                        tool_args = json.loads(tc.function.arguments or "{}")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"工具参数 JSON 解析失败 [{tool_name}]: {e}")
+                        result = f"工具 [{tool_name}] 参数不是合法 JSON: {tc.function.arguments}"
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": result,
+                        })
+                        continue
+
                     try:
                         result = await mcp.call_tool(tool_name, tool_args)
                     except Exception as e:

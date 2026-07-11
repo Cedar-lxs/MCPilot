@@ -10,17 +10,11 @@ def get_project_root() -> str:
         :return:字符串根目录
     """
 
-    # 当前文件的绝对路径
+    # 当前文件: <root>/src/utils/path_tool.py → 上溯两级到项目根目录
     current_file = os.path.abspath(__file__)
-    # print("当前文件的绝对路径：" + current_file)
-    #获取工程的根目录，先获取文件所在文件夹的绝对路径
-    current_dir = os.path.dirname(current_file)
-    # print("当前文件夹的绝对路径:" + current_dir)
-    # 获取工程根目录
-    project_root = os.path.dirname(current_dir)
-    # print("当前工程的绝对路径:" + project_root)
-
-
+    utils_dir = os.path.dirname(current_file)       # .../src/utils
+    src_dir = os.path.dirname(utils_dir)            # .../src
+    project_root = os.path.dirname(src_dir)         # .../ (项目根)
     return project_root
 
 def get_abs_path(relative_path: str) -> str:

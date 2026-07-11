@@ -8,7 +8,7 @@ class RagTool:
     def get_definition(self) -> dict:
         return {
             "name": "rag_query",
-            "description": "从本地知识库检索信息，支持 RAG 增强问答。当用户问到可能存在于知识库中的内容时使用",
+            "description": "从本地知识库检索相关原文片段（仅检索，不生成最终答案）。当用户问到可能存在于知识库中的内容时使用",
             "inputSchema": {
                 "type": "object",
                 "properties": {

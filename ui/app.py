@@ -30,13 +30,21 @@ if prompt := st.chat_input("说点什么..."):
     with st.chat_message("assistant"):
         with st.spinner("MCPilot 正在思考..."):
             try:
-                response = httpx.post(f"{API_URL}/chat", json= {
+                response = httpx.post(f"{API_URL}/chat", json={
                     "message": prompt,
                     "history": st.session_state.history
-                }, timeout = 180)
+                }, timeout=180)
+                response.raise_for_status()
                 data = response.json()
                 answer = data["answer"]
                 st.session_state.history = data["history"]
+            except httpx.HTTPStatusError as e:
+                detail = e.response.text
+                try:
+                    detail = e.response.json().get("detail", detail)
+                except Exception:
+                    pass
+                answer = f"API 错误 ({e.response.status_code}): {detail}"
             except Exception as e:
                 answer = f"出错了: {e}"
 

@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from src.agent.core import run
@@ -9,8 +9,11 @@ from src.mcp_client.client import MCPClient
 from src.rag.rag import query as rag_query
 from src.rag.vector_store import VectorStore
 from src.utils.logger_handler import logger
+from src.utils.path_tool import get_project_root
 
 app = FastAPI(title="MCPilot API", version="1.0")
+
+PROJECT_ROOT = Path(get_project_root()).resolve()
 
 
 # ── 全局 MCP Client 生命周期 ──────────────────────────────
@@ -68,6 +71,11 @@ class RagQueryResponse(BaseModel):
 async def chat(req: ChatRequest):
     """接收用户消息，返回 Agent 回答 + 更新后的历史"""
     mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
+    if mcp is None:
+        raise HTTPException(
+            status_code=503,
+            detail="MCP Client 未连接，请检查服务启动日志后重启",
+        )
     answer, new_history = await run(req.message, req.history, mcp_client=mcp)
     return ChatResponse(answer=answer, history=new_history)
 
@@ -105,12 +113,30 @@ async def list_documents():
     return {"documents": sorted(sources), "total": len(all_data["ids"])}
 
 
+def _resolve_safe_path(filepath: str) -> Path:
+    """将路径解析到项目根目录内，防止任意文件读取"""
+    path = Path(filepath)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    path = path.resolve()
+    try:
+        path.relative_to(PROJECT_ROOT)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"路径必须在项目目录内: {PROJECT_ROOT}",
+        )
+    return path
+
+
 @app.post("/documents/upload")
 async def upload_document(filepath: str):
-    """上传文件，导入知识库"""
-    path = Path(filepath)
+    """上传文件，导入知识库（仅允许项目目录内的文件）"""
+    path = _resolve_safe_path(filepath)
     if not path.exists():
-        return {"error": f"文件不存在: {filepath}"}
+        raise HTTPException(status_code=404, detail=f"文件不存在: {filepath}")
+    if not path.is_file():
+        raise HTTPException(status_code=400, detail=f"不是文件: {filepath}")
 
     text = await asyncio.to_thread(path.read_text, encoding="utf-8")
     store = VectorStore()

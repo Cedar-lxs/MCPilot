@@ -13,7 +13,7 @@ from src.utils.logger_handler import logger
 load_dotenv(override=True)
 
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_data")
-TOP_K = int(os.getenv("TOP_K"))
+TOP_K = int(os.getenv("TOP_K", "5"))
 
 
 class VectorStore:

@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-# 从 .env 读取配置
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP"))
+# 从 .env 读取配置（未配置时使用合理默认值）
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "50"))
 
 
 def chunk_text(text: str, chunk_size: int = None, chunk_overlap: int = None) -> list[str]:
@@ -23,6 +23,13 @@ def chunk_text(text: str, chunk_size: int = None, chunk_overlap: int = None) -> 
         chunk_size = CHUNK_SIZE
     if chunk_overlap is None:
         chunk_overlap = CHUNK_OVERLAP
+
+    if chunk_size <= 0:
+        raise ValueError(f"chunk_size 必须 > 0，当前: {chunk_size}")
+
+    # overlap 不能 >= size，否则步长 <= 0 会死循环
+    if chunk_overlap >= chunk_size:
+        chunk_overlap = max(0, chunk_size // 10)
 
     # 计算步长（每次往前走多少字符）
     step = chunk_size - chunk_overlap

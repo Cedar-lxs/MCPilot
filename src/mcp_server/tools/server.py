@@ -41,7 +41,14 @@ async def list_tools() -> list[Tool]:
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     for tool in _TOOLS:
         if tool.get_definition()["name"] == name:
-            result = await tool.execute(**arguments)
+            try:
+                result = await tool.execute(**(arguments or {}))
+            except TypeError as e:
+                logger.error(f"工具 [{name}] 参数错误: {e}")
+                result = f"工具 [{name}] 参数错误: {e}"
+            except Exception as e:
+                logger.error(f"工具 [{name}] 执行失败: {e}")
+                result = f"工具 [{name}] 执行失败: {e}"
             return [TextContent(type="text", text=result)]
     raise ValueError(f"未知工具: {name}")
 
