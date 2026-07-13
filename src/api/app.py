@@ -65,19 +65,54 @@ class RagQueryResponse(BaseModel):
     answer: str
 
 
-# ── 路由 ──────────────────────────────────────────────────
+# 路由
+# @app.post("/chat", response_model=ChatResponse)
+# async def chat(req: ChatRequest):
+#     """接收用户消息，返回 Agent 回答 + 更新后的历史"""
+#     mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
+#     if mcp is None:
+#         raise HTTPException(
+#             status_code=503,
+#             detail="MCP Client 未连接，请检查服务启动日志后重启",
+#         )
+#     answer, new_history = await run(req.message, req.history, mcp_client=mcp)
+#     return ChatResponse(answer=answer, history=new_history)
 
+from src.agent.react_graph import get_tools, build_graph
+
+
+
+
+"""手写 ReAct 调用换成你的新 LangGraph"""
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     """接收用户消息，返回 Agent 回答 + 更新后的历史"""
     mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
-    if mcp is None:
-        raise HTTPException(
-            status_code=503,
-            detail="MCP Client 未连接，请检查服务启动日志后重启",
-        )
-    answer, new_history = await run(req.message, req.history, mcp_client=mcp)
-    return ChatResponse(answer=answer, history=new_history)
+    if not mcp:
+        return ChatResponse(answer="MCP 未连接", history=req.history)
+    
+    # 1. 从 MCP 获取工具列表
+    tools = await get_tools(mcp)
+    
+    # 2. 构建 LangGraph 并编译
+    graph = build_graph(tools)
+    
+    # 3. 构建消息历史
+    history = list(req.history) if req.history else []
+    history.append({"role": "user", "content": req.message})
+    # 转成 LangChain 消息格式
+    from langchain_core.messages import HumanMessage
+    langchain_messages = [HumanMessage(content=req.message)]
+    if req.history:
+        langchain_messages = req.history + langchain_messages
+    
+    # 4. 跑图
+    result = await graph.ainvoke({"messages": langchain_messages})
+    
+    # 5. 提取答案
+    answer = result["messages"][-1].content
+    
+    return ChatResponse(answer=answer, history=result["messages"])
 
 
 @app.get("/health")
