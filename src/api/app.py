@@ -10,6 +10,8 @@ from src.rag.rag import query as rag_query
 from src.rag.vector_store import VectorStore
 from src.utils.logger_handler import logger
 from src.utils.path_tool import get_project_root
+import json
+from src.agent.prompt import SYSTEM_PROMPT
 
 app = FastAPI(title="MCPilot API", version="1.0")
 
@@ -25,10 +27,18 @@ async def startup():
     try:
         await mcp.connect()
         app.state.mcp_client = mcp
-        logger.info("MCP Client 已连接")
+
+        # 启动时一次剑豪LangGraph，复用
+        # 1. 从 MCP 获取工具列表
+        tools = await get_tools(mcp)
+        # 2. 构建 LangGraph 并编译
+        app.state.graph = build_graph(tools)
+        
+        logger.info("MCP Client 已连接，LangGraph 已初始化")
     except Exception as e:
-        logger.error(f"MCP Client 启动失败: {e}")
+        logger.error(f"启动失败: {e}")
         app.state.mcp_client = None
+        app.state.graph = None
 
 
 @app.on_event("shutdown")
@@ -65,24 +75,7 @@ class RagQueryResponse(BaseModel):
     answer: str
 
 
-# 路由
-# @app.post("/chat", response_model=ChatResponse)
-# async def chat(req: ChatRequest):
-#     """接收用户消息，返回 Agent 回答 + 更新后的历史"""
-#     mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
-#     if mcp is None:
-#         raise HTTPException(
-#             status_code=503,
-#             detail="MCP Client 未连接，请检查服务启动日志后重启",
-#         )
-#     answer, new_history = await run(req.message, req.history, mcp_client=mcp)
-#     return ChatResponse(answer=answer, history=new_history)
-
 from src.agent.react_graph import get_tools, build_graph
-
-
-
-
 """手写 ReAct 调用换成你的新 LangGraph"""
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
@@ -91,28 +84,85 @@ async def chat(req: ChatRequest):
     if not mcp:
         return ChatResponse(answer="MCP 未连接", history=req.history)
     
-    # 1. 从 MCP 获取工具列表
-    tools = await get_tools(mcp)
-    
-    # 2. 构建 LangGraph 并编译
-    graph = build_graph(tools)
+    # 取启动时建好的Graph
+    graph = getattr(app.state, "graph", None)
+    if graph is None:
+        return ChatResponse(answer="服务器尚未就绪", history=req.history)
     
     # 3. 构建消息历史
-    history = list(req.history) if req.history else []
-    history.append({"role": "user", "content": req.message})
-    # 转成 LangChain 消息格式
-    from langchain_core.messages import HumanMessage
-    langchain_messages = [HumanMessage(content=req.message)]
+    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
+    
+    langchain_messages = []
+
+    # 检查历史有没有System消息，没有就插入
+    has_system = False
     if req.history:
-        langchain_messages = req.history + langchain_messages
+        for msg in req.history:
+            if msg.get("role") == "system":
+                has_system=True
+                break
+    if not has_system:
+        langchain_messages.append(SystemMessage(content=SYSTEM_PROMPT))
+
+
+    if req.history:
+        for msg in req.history:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role == "system":
+                langchain_messages.append(SystemMessage(content=content))
+            elif role == "user":
+                langchain_messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                langchain_messages.append(AIMessage(content=content))
+            elif role == "tool":
+                langchain_messages.append(ToolMessage(
+                    content=content,
+                    tool_call_id=msg.get("tool_call_id", ""),
+                ))
+
+    langchain_messages.append(HumanMessage(content=req.message))
     
     # 4. 跑图
     result = await graph.ainvoke({"messages": langchain_messages})
     
     # 5. 提取答案
     answer = result["messages"][-1].content
+
+    # 把BaseMessage列表转成Dict列表，前端才能复用
+    history_dicts = []
+    for msg in result["messages"]:
+        role_map = {
+            "human": "user",
+            "ai": "assistant",
+            "system":"system",
+            "tool":"tool",
+        }
+
+        entry = {
+            "role": role_map.get(msg.type, msg.type),
+            "content": msg.content or "",
+        }
+
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            entry["tool_calls"] = [
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": json.dumps(tc["args"], ensure_ascii=False),
+                    },
+                }
+                for tc in msg.tool_calls
+]
+
+        if msg.type == "tool" and hasattr(msg, "tool_call_id"):
+            entry["tool_call_id"] = msg.tool_call_id
+        
+        history_dicts.append(entry)
     
-    return ChatResponse(answer=answer, history=result["messages"])
+    return ChatResponse(answer= answer, history= history_dicts)
 
 
 @app.get("/health")

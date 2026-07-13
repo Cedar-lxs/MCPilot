@@ -24,7 +24,10 @@ llm = ChatOpenAI(
     max_tokens = MAX_TOKENS
 )
 
-# 获取MCP客户端，然后获取工具列表
+# 构造带工具绑定的LLM 
+llm_with_tools = None  # 等外部调用时传 tools 进来再绑定
+
+
 async def get_tools(mcp_client: MCPClient) -> list:
     """从 MCP 获取工具列表，转成 LangChain tool 格式，保留完整参数定义"""
     from langchain_core.tools import StructuredTool
@@ -32,7 +35,7 @@ async def get_tools(mcp_client: MCPClient) -> list:
 
     mcp_tools = await mcp_client.list_tools()
     tools = []
-    
+
     def _make_coro(tool_name: str, client: MCPClient):
         """创建工具异步调用函数"""
         async def _run(**kwargs) -> str:
@@ -48,27 +51,21 @@ async def get_tools(mcp_client: MCPClient) -> list:
             coroutine=_make_coro(t.name, mcp_client),
         )
         tools.append(tool)
-    
+
     return tools
-
-
-# 构造带工具绑定的LLM 
-llm_with_tools = None  # 等外部调用时传 tools 进来再绑定
-
-
-# Agent 节点 
-async def agent_node(state: MessagesState) -> dict:
-    """调 LLM 决定下一步行动"""
-    global llm_with_tools
-    response = await llm_with_tools.ainvoke(state["messages"])
-    return {"messages": [response]}
 
 
 # 构建图 
 def build_graph(tools: list) -> object:
     """传入工具列表，构建并编译 LangGraph"""
-    global llm_with_tools
+    # 每个 graph 实例绑定自己的 llm_with_tools，互不干扰
     llm_with_tools = llm.bind_tools(tools)
+
+    # Agent 节点 — 定义在 build_graph 内部，闭包捕获上面的 llm_with_tools
+    async def agent_node(state: MessagesState) -> dict:
+        response = await llm_with_tools.ainvoke(state["messages"])
+        return {"messages": [response]}
+    
 
     builder = StateGraph(MessagesState)
 

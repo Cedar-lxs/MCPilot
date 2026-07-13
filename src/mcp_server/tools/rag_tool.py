@@ -1,10 +1,14 @@
 """MCP Tool: RAG 知识库查询"""
 from src.utils.logger_handler import logger
+from src.rag.vector_store import VectorStore
 
 
 class RagTool:
-    """RAG 知识库查询"""
 
+    def __init__(self):
+        self.store = VectorStore()
+
+    """RAG 知识库查询"""
     def get_definition(self) -> dict:
         return {
             "name": "rag_query",
@@ -23,11 +27,8 @@ class RagTool:
     
     async def execute(self, question: str) -> str:
         """执行 RAG 查询 — 只检索原文，不调 LLM"""
-        from src.rag.vector_store import VectorStore
-
         try:
-            store = VectorStore()
-            results = await store.search(question)
+            results = await self.store.search(question)
             if not results:
                 logger.warning("知识库中没有找到相关内容")
                 return "知识库中没有找到相关内容"
