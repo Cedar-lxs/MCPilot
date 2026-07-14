@@ -1,44 +1,74 @@
 """用 LangGraph 替换手写 ReAct 循环"""
-from langgraph.graph import StateGraph, MessagesState, START, END
-from langgraph.prebuilt import ToolNode, tools_condition
-from dotenv import load_dotenv
+from typing import Any
+
+from langchain_core.tools import StructuredTool
+from langchain_core.utils.json_schema import dereference_refs
 from langchain_openai import ChatOpenAI
-import os
-import json
+from langgraph.graph import StateGraph, MessagesState, START, END
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+from pydantic import BaseModel, Field, create_model
+
 from src.mcp_client.client import MCPClient
-
-load_dotenv(override=True)
-MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash")
-API_KEY = os.getenv("OPENAI_API_KEY")
-MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
-MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "10"))
-TEMPERATURE = float(os.getenv("AGENT_TEMPERATURE", "0.3"))
-BASE_URL = os.getenv("OPENAI_BASE_URL")
-
-# LLM 客户端
-llm = ChatOpenAI(
-    model=MODEL,
-    api_key=API_KEY,
-    base_url=BASE_URL,
-    temperature=TEMPERATURE,
-    max_tokens = MAX_TOKENS
-)
-
-# 构造带工具绑定的LLM 
-llm_with_tools = None  # 等外部调用时传 tools 进来再绑定
+from src.utils.config import (AGENT_TEMPERATURE, LLM_MAX_TOKENS, LLM_MODEL,
+                               OPENAI_API_KEY, OPENAI_BASE_URL)
 
 
-async def get_tools(mcp_client: MCPClient) -> list:
-    """从 MCP 获取工具列表，转成 LangChain tool 格式，保留完整参数定义"""
-    from langchain_core.tools import StructuredTool
-    from langchain_core.utils.json_schema import dereference_refs
+# ─── JSON Schema → Pydantic Model ──────────────────────────
 
+_JSON_TYPE_MAP: dict[str, type] = {
+    "string": str,
+    "integer": int,
+    "number": float,
+    "boolean": bool,
+}
+
+
+def _schema_to_pydantic(name: str, schema: dict[str, Any]) -> type[BaseModel]:
+    """将 MCP Tool 的 JSON Schema dict 转为 Pydantic Model 类。
+
+    先 dereference_refs 解析 $ref 引用，再 create_model 动态生成类。
+    """
+    resolved = dereference_refs(schema) if schema else {}
+    props = resolved.get("properties", {})
+    required = set(resolved.get("required", []))
+
+    fields: dict[str, tuple[type, Any]] = {}
+    for field_name, field_schema in props.items():
+        field_type = _JSON_TYPE_MAP.get(field_schema.get("type", "string"), str)
+        description = field_schema.get("description", "")
+
+        if field_name in required:
+            fields[field_name] = (field_type, Field(..., description=description))
+        elif "default" in field_schema:
+            fields[field_name] = (
+                field_type,
+                Field(default=field_schema["default"], description=description),
+            )
+        else:
+            fields[field_name] = (
+                field_type | None,
+                Field(default=None, description=description),
+            )
+
+    return create_model(f"{name}_Input", **fields) if fields else create_model(f"{name}_Input")
+
+
+# ─── MCP Tools → LangChain StructuredTool ──────────────────
+
+async def get_tools(mcp_client: MCPClient) -> list[StructuredTool]:
+    """从 MCP 获取工具列表，转成 LangChain StructuredTool 列表。
+
+    返回的 list[StructuredTool] 同时满足：
+    - llm.bind_tools()  → 底层转为 OpenAI function calling dict
+    - ToolNode(tools)   → 作为 LangGraph 工具节点消费
+    """
     mcp_tools = await mcp_client.list_tools()
-    tools = []
+    tools: list[StructuredTool] = []
 
     def _make_coro(tool_name: str, client: MCPClient):
-        """创建工具异步调用函数"""
-        async def _run(**kwargs) -> str:
+        """创建工具异步调用函数——工厂函数避免闭包延迟绑定"""
+        async def _run(**kwargs: Any) -> str:
             return await client.call_tool(tool_name, kwargs)
         return _run
 
@@ -46,7 +76,7 @@ async def get_tools(mcp_client: MCPClient) -> list:
         tool = StructuredTool(
             name=t.name,
             description=t.description or "",
-            args_schema=dereference_refs(t.inputSchema) if t.inputSchema else None,
+            args_schema=_schema_to_pydantic(t.name, t.inputSchema or {}),
             func=None,
             coroutine=_make_coro(t.name, mcp_client),
         )
@@ -55,25 +85,20 @@ async def get_tools(mcp_client: MCPClient) -> list:
     return tools
 
 
-# 构建图 
-def build_graph(tools: list) -> object:
+# ─── LangGraph 构建 ─────────────────────────────────────────
+
+def build_graph(tools: list[StructuredTool]) -> CompiledStateGraph:
     """传入工具列表，构建并编译 LangGraph"""
-    # 每个 graph 实例绑定自己的 llm_with_tools，互不干扰
     llm_with_tools = llm.bind_tools(tools)
 
-    # Agent 节点 — 定义在 build_graph 内部，闭包捕获上面的 llm_with_tools
     async def agent_node(state: MessagesState) -> dict:
         response = await llm_with_tools.ainvoke(state["messages"])
         return {"messages": [response]}
-    
 
     builder = StateGraph(MessagesState)
-
-    # 节点
     builder.add_node("agent", agent_node)
     builder.add_node("tools", ToolNode(tools))
 
-    # 边
     builder.add_edge(START, "agent")
     builder.add_conditional_edges(
         "agent",

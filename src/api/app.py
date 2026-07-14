@@ -1,17 +1,18 @@
 import asyncio
+import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel
 
-from src.agent.core import run
+from src.agent.prompt import SYSTEM_PROMPT
+from src.agent.react_graph import build_graph, get_tools
 from src.mcp_client.client import MCPClient
 from src.rag.rag import query as rag_query
 from src.rag.vector_store import VectorStore
 from src.utils.logger_handler import logger
 from src.utils.path_tool import get_project_root
-import json
-from src.agent.prompt import SYSTEM_PROMPT
 
 app = FastAPI(title="MCPilot API", version="1.0")
 
@@ -54,7 +55,7 @@ async def shutdown():
 
 class ChatRequest(BaseModel):
     message: str
-    history: list | None = None
+    history: list[dict] | None = None
 
 class ChatResponse(BaseModel):
     answer: str
@@ -75,8 +76,6 @@ class RagQueryResponse(BaseModel):
     answer: str
 
 
-from src.agent.react_graph import get_tools, build_graph
-"""手写 ReAct 调用换成你的新 LangGraph"""
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     """接收用户消息，返回 Agent 回答 + 更新后的历史"""
@@ -90,8 +89,6 @@ async def chat(req: ChatRequest):
         return ChatResponse(answer="服务器尚未就绪", history=req.history)
     
     # 3. 构建消息历史
-    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
-    
     langchain_messages = []
 
     # 检查历史有没有System消息，没有就插入

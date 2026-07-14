@@ -1,14 +1,7 @@
 """
     文本分块 — 把长文本切成有重叠的小段
 """
-import os 
-from dotenv import load_dotenv
-
-load_dotenv(override=True)
-
-# 从 .env 读取配置（未配置时使用合理默认值）
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "50"))
+from src.utils.config import CHUNK_OVERLAP, CHUNK_SIZE
 
 
 def chunk_text(text: str, chunk_size: int = None, chunk_overlap: int = None) -> list[str]:

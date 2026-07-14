@@ -1,15 +1,13 @@
 """
     RAG 查询链路 — 检索 + LLM 回答
 """
-import os 
-from dotenv import load_dotenv
 from openai import OpenAI
+
 from src.rag.vector_store import VectorStore
+from src.utils.config import LLM_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL
 from src.utils.logger_handler import logger
 
-load_dotenv(override=True)
-
-# 共享 LLM 客户端（与 agent/core.py 复用同一份配置）
+# 共享 LLM 客户端（与 agent 复用同一份配置）
 _rag_client: OpenAI | None = None
 
 
@@ -17,13 +15,10 @@ def _get_client() -> OpenAI:
     global _rag_client
     if _rag_client is None:
         _rag_client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("OPENAI_BASE_URL"),
+            api_key=OPENAI_API_KEY,
+            base_url=OPENAI_BASE_URL,
         )
     return _rag_client
-
-
-LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash")
 
 
 

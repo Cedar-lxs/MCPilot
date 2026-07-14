@@ -1,19 +1,14 @@
 """
     向量存储 — ChromaDB 持久化向量库
 """
-import os
 from uuid import uuid4
-from dotenv import load_dotenv
+
 import chromadb
 
 from src.rag.chunk import chunk_text
 from src.rag.embeddings import embed_texts
+from src.utils.config import CHROMA_DB_PATH, TOP_K
 from src.utils.logger_handler import logger
-
-load_dotenv(override=True)
-
-CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_data")
-TOP_K = int(os.getenv("TOP_K", "5"))
 
 
 class VectorStore:

@@ -1,17 +1,12 @@
 """
     文本向量化
 """
-import os
-from dotenv import  load_dotenv
 from typing import List
+
 import httpx
+
+from src.utils.config import EMBEDDING_API_KEY, EMBEDDING_BASE_URL, EMBEDDING_MODEL
 from src.utils.logger_handler import logger
-
-load_dotenv(override=True)
-
-API_KEY = os.getenv("EMBEDDING_API_KEY")
-BASE_URL = os.getenv("EMBEDDING_BASE_URL")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 
 
 async def embed_texts(text: List[str]) -> List[List[float]]:
@@ -23,16 +18,16 @@ async def embed_texts(text: List[str]) -> List[List[float]]:
         调用 OpenAI 兼容的 Embedding API
         POST {base_url}/embeddings → 返回向量数组
     """
-    # 检查API_KEY有没有配置
-    if not API_KEY:
+    # 检查 API Key 有没有配置
+    if not EMBEDDING_API_KEY:
         logger.error("EMBEDDING_API_KEY 未配置")
         raise ValueError("EMBEDDING_API_KEY 未配置")
-    if not BASE_URL:
+    if not EMBEDDING_BASE_URL:
         logger.error("EMBEDDING_BASE_URL 未配置")
         raise ValueError("EMBEDDING_BASE_URL 未配置")
 
     # 拼出完整的API URL
-    url = f"{BASE_URL.rstrip('/')}/embeddings"
+    url = f"{EMBEDDING_BASE_URL.rstrip('/')}/embeddings"
 
 
     # 一次全部发送所有向量化文本，导致超限
@@ -57,7 +52,7 @@ async def embed_texts(text: List[str]) -> List[List[float]]:
                     "input": batch,
                 },
                 headers={
-                    "Authorization": f"Bearer {API_KEY}",
+                    "Authorization": f"Bearer {EMBEDDING_API_KEY}",
                     "Content-Type": "application/json",
                 }
             )

@@ -1,24 +1,18 @@
 import json
-import os
-from dotenv import load_dotenv
-
-load_dotenv(override=True)
 
 from openai import OpenAI
+
 from src.mcp_client.client import MCPClient
 from src.agent.prompt import SYSTEM_PROMPT
+from src.utils.config import (AGENT_TEMPERATURE, LLM_MAX_TOKENS, LLM_MODEL,
+                               MAX_ITERATIONS, OPENAI_API_KEY, OPENAI_BASE_URL)
 from src.utils.logger_handler import logger
 
 # LLM 客户端
 _client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("OPENAI_BASE_URL"),
+    api_key=OPENAI_API_KEY,
+    base_url=OPENAI_BASE_URL,
 )
-
-MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash")
-MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
-MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "10"))
-TEMPERATURE = float(os.getenv("AGENT_TEMPERATURE", "0.3"))
 
 
 def _assistant_message_to_dict(message) -> dict:
@@ -47,9 +41,9 @@ def _assistant_message_to_dict(message) -> dict:
 
 async def run(
     user_input: str,
-    history: list | None = None,
+    history: list[dict] | None = None,
     mcp_client: MCPClient | None = None,
-) -> tuple[str, list]:
+) -> tuple[str, list[dict]]:
     """
     执行一次对话，返回 (最终答案, 更新后的消息历史)
 
@@ -81,12 +75,12 @@ async def run(
         for iteration in range(MAX_ITERATIONS):
             try:
                 response = _client.chat.completions.create(
-                    model=MODEL,
+                    model=LLM_MODEL,
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
-                    max_tokens=MAX_TOKENS,
-                    temperature=TEMPERATURE,
+                    max_tokens=LLM_MAX_TOKENS,
+                    temperature=AGENT_TEMPERATURE,
                 )
             except Exception as e:
                 logger.error(f"LLM API 调用失败: {e}")
