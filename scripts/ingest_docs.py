@@ -26,7 +26,7 @@ async def main():
             ids = await store.add_texts([text], source=md_file.name)
             print(f"  → 已存入 {len(ids)} 个文本块")
         except Exception as e:
-            print(f"  ❌ 导入失败: {e}")
+            print(f"  [失败] 导入失败: {e}")
 
     print(f"\n导入完成！共处理 {len(md_files)} 个文件")
 

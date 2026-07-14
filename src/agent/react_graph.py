@@ -16,7 +16,7 @@ from src.utils.config import (AGENT_TEMPERATURE, LLM_MAX_TOKENS, LLM_MODEL,
 # LLM 客户端
 llm = ChatOpenAI(
     model=LLM_MODEL,
-    api_key=***
+    api_key=OPENAI_API_KEY,
     base_url=OPENAI_BASE_URL,
     temperature=AGENT_TEMPERATURE,
     max_tokens=LLM_MAX_TOKENS,

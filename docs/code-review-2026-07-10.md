@@ -18,7 +18,7 @@ User → Streamlit UI → FastAPI API → Agent ReAct Loop → MCP Client → st
 
 ---
 
-## 二、🔴 严重问题（建议立即修复）
+## 二、[*] 严重问题（建议立即修复）
 
 ### 1. `.env` 包含真实 API Key —— 安全隐患
 
@@ -152,7 +152,7 @@ RAG 回答阶段的 prompt 不应该包含 Agent 工具描述。
 
 ### 14. 导入风格不统一
 
-- `mcp_server/tools/` 内部使用相对导入 `from .calculator import Calculator` ✅
+- `mcp_server/tools/` 内部使用相对导入 `from .calculator import Calculator` [Y]
 - `agent/` 使用绝对导入 `from src.mcp_client.client import MCPClient`
 - 建议全项目统一为绝对导入
 
@@ -225,15 +225,15 @@ async def startup():
 
 | 类别 | 数量 | 关键项 |
 |------|------|--------|
-| 🔴 严重 | 4 | API Key 泄露、eval 安全、类变量共享、GBK 编码 |
+| [*] 严重 | 4 | API Key 泄露、eval 安全、类变量共享、GBK 编码 |
 | 🟡 中等 | 9 | 子进程开销、硬编码、爬虫脆弱、死代码、同步阻塞等 |
 | 🟢 轻微 | 7 | 导入风格、重复创建、拼写错误等 |
 | **总计** | **20** | |
 
 **核心建议优先级:**
-1. 🔥 修复 `eval` 安全漏洞（加返回值拦截）
-2. 🔥 `NoteTool._store` 改为实例变量
-3. 🔥 去掉 GBK 编码转换
+1.  修复 `eval` 安全漏洞（加返回值拦截）
+2.  `NoteTool._store` 改为实例变量
+3.  去掉 GBK 编码转换
 4. 清理死代码
 5. 替换 Bing 爬虫为正式 API
 6. 复用 MCP Client 连接

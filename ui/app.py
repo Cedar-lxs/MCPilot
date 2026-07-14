@@ -3,7 +3,7 @@ import httpx
 
 API_URL = "http://localhost:8000"
 
-st.set_page_config(page_title="MCPilot", page_icon="🤖")
+st.set_page_config(page_title="MCPilot", page_icon="")
 st.title("MCPilot - 智能助手")
 
 
