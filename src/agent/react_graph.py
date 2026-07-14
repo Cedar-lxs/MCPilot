@@ -13,6 +13,15 @@ from src.mcp_client.client import MCPClient
 from src.utils.config import (AGENT_TEMPERATURE, LLM_MAX_TOKENS, LLM_MODEL,
                                OPENAI_API_KEY, OPENAI_BASE_URL)
 
+# LLM 客户端
+llm = ChatOpenAI(
+    model=LLM_MODEL,
+    api_key=***
+    base_url=OPENAI_BASE_URL,
+    temperature=AGENT_TEMPERATURE,
+    max_tokens=LLM_MAX_TOKENS,
+)
+
 
 # ─── JSON Schema → Pydantic Model ──────────────────────────
 
