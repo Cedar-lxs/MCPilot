@@ -32,3 +32,6 @@ beautifulsoup4==4.12.3       # HTML 解析（Bing 搜索结果）
 # === 测试 ===
 pytest==8.3.0
 pytest-asyncio==0.24.0
+
+# === HTML 转换 ===
+html2text==2025.4.15

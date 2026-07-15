@@ -11,17 +11,35 @@ from mcp.types import Tool, TextContent
 import asyncio
 
 from src.utils.logger_handler import logger
-from .calculator import Calculator
-from .note import NoteTool
-from .web_search import WebSearchTool
-from .rag_tool import RagTool
+
+try:
+    from .calculator import Calculator
+    from .note import NoteTool
+    from .web_search import WebSearchTool
+    from .rag_tool import RagTool
+    from .datetime_tool import DateTimeTool
+    from .url_fetch import UrlFetchTool
+except ImportError:
+    from src.mcp_server.tools.calculator import Calculator
+    from src.mcp_server.tools.note import NoteTool
+    from src.mcp_server.tools.web_search import WebSearchTool
+    from src.mcp_server.tools.rag_tool import RagTool
+    from src.mcp_server.tools.datetime_tool import DateTimeTool
+    from src.mcp_server.tools.url_fetch import UrlFetchTool
 
 # 创建MCP实例
 app = Server("MCPilot")
 
 
 # 工具注册列表：加新工具在这里加一行
-_TOOLS: list = [Calculator(), NoteTool(), WebSearchTool(), RagTool()]
+_TOOLS: list = [
+    Calculator(), 
+    NoteTool(), 
+    WebSearchTool(), 
+    RagTool(), 
+    DateTimeTool(), 
+    UrlFetchTool()
+]
 
 
 @app.list_tools()
