@@ -3,7 +3,8 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from fastapi.responses import StreamingResponse
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel
 
 from src.agent.prompt import SYSTEM_PROMPT
@@ -29,7 +30,7 @@ async def startup():
         await mcp.connect()
         app.state.mcp_client = mcp
 
-        # 启动时一次剑豪LangGraph，复用
+        # 启动时一次建好LangGraph，复用
         # 1. 从 MCP 获取工具列表
         tools = await get_tools(mcp)
         # 2. 构建 LangGraph 并编译
@@ -76,70 +77,40 @@ class RagQueryResponse(BaseModel):
     answer: str
 
 
-@app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    """接收用户消息，返回 Agent 回答 + 更新后的历史"""
-    mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
-    if not mcp:
-        return ChatResponse(answer="MCP 未连接", history=req.history)
-    
-    # 取启动时建好的Graph
-    graph = getattr(app.state, "graph", None)
-    if graph is None:
-        return ChatResponse(answer="服务器尚未就绪", history=req.history)
-    
-    # 3. 构建消息历史
-    langchain_messages = []
-
-    # 检查历史有没有System消息，没有就插入
-    has_system = False
-    if req.history:
-        for msg in req.history:
-            if msg.get("role") == "system":
-                has_system=True
-                break
+def _build_messages(req: ChatRequest) -> list[BaseMessage]:
+    """将 API 历史转换为 LangChain 消息，并确保包含系统提示。"""
+    messages: list[BaseMessage] = []
+    # any(...)检查历史里有没有system消息
+    has_system = any(msg.get("role") == "system" for msg in req.history or [])
     if not has_system:
-        langchain_messages.append(SystemMessage(content=SYSTEM_PROMPT))
+        messages.append(SystemMessage(content=SYSTEM_PROMPT))
+
+    for msg in req.history or []:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "system":
+            messages.append(SystemMessage(content=content))
+        elif role == "user":
+            messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            messages.append(AIMessage(content=content))
+        elif role == "tool":
+            messages.append(ToolMessage(
+                content=content,
+                tool_call_id=msg.get("tool_call_id", ""),
+            ))
+
+    messages.append(HumanMessage(content=req.message))
+    return messages
 
 
-    if req.history:
-        for msg in req.history:
-            role = msg.get("role")
-            content = msg.get("content", "")
-            if role == "system":
-                langchain_messages.append(SystemMessage(content=content))
-            elif role == "user":
-                langchain_messages.append(HumanMessage(content=content))
-            elif role == "assistant":
-                langchain_messages.append(AIMessage(content=content))
-            elif role == "tool":
-                langchain_messages.append(ToolMessage(
-                    content=content,
-                    tool_call_id=msg.get("tool_call_id", ""),
-                ))
+def _serialize_history(messages: list[BaseMessage]) -> list[dict]:
+    """将 LangChain 消息转换为前端可复用的历史记录。"""
+    history = []
+    role_map = {"human": "user", "ai": "assistant", "system": "system", "tool": "tool"}
 
-    langchain_messages.append(HumanMessage(content=req.message))
-    
-    # 4. 跑图
-    result = await graph.ainvoke({"messages": langchain_messages})
-    
-    # 5. 提取答案
-    answer = result["messages"][-1].content
-
-    # 把BaseMessage列表转成Dict列表，前端才能复用
-    history_dicts = []
-    for msg in result["messages"]:
-        role_map = {
-            "human": "user",
-            "ai": "assistant",
-            "system":"system",
-            "tool":"tool",
-        }
-
-        entry = {
-            "role": role_map.get(msg.type, msg.type),
-            "content": msg.content or "",
-        }
+    for msg in messages:
+        entry = {"role": role_map.get(msg.type, msg.type), "content": msg.content or ""}
 
         if hasattr(msg, "tool_calls") and msg.tool_calls:
             entry["tool_calls"] = [
@@ -152,14 +123,76 @@ async def chat(req: ChatRequest):
                     },
                 }
                 for tc in msg.tool_calls
-]
+            ]
 
         if msg.type == "tool" and hasattr(msg, "tool_call_id"):
             entry["tool_call_id"] = msg.tool_call_id
-        
-        history_dicts.append(entry)
+
+        history.append(entry)
+
+    return history
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest):
+    """接收用户消息，返回 Agent 回答 + 更新后的历史"""
+    mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
+    if not mcp:
+        return ChatResponse(answer="MCP 未连接", history=req.history)
     
-    return ChatResponse(answer= answer, history= history_dicts)
+    # 取启动时建好的Graph
+    graph = getattr(app.state, "graph", None)
+    if graph is None:
+        return ChatResponse(answer="服务器尚未就绪", history=req.history)
+    
+    langchain_messages = _build_messages(req)
+
+    # 4. 跑图
+    result = await graph.ainvoke({"messages": langchain_messages})
+
+    # 5. 提取答案
+    answer = result["messages"][-1].content
+    history_dicts = _serialize_history(result["messages"])
+
+    return ChatResponse(answer=answer, history=history_dicts)
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    """以 SSE 持续推送模型 token，并在结束时返回完整历史。"""
+    mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
+    graph = getattr(app.state, "graph", None)
+    if not mcp or graph is None:
+        raise HTTPException(status_code=503, detail="服务器尚未就绪")
+
+    langchain_messages = _build_messages(req)
+
+    async def generate():
+        final_messages: list[BaseMessage] | None = None
+        async for event in graph.astream_events(
+            {"messages": langchain_messages},
+            version="v2",
+        ):
+            if event["event"] == "on_chat_model_stream":
+                chunk = event["data"]["chunk"]
+                content = chunk.content
+                if isinstance(content, str) and content:
+                    yield f"event: token\ndata: {json.dumps({'token': content}, ensure_ascii=False)}\n\n"
+            elif event["event"] == "on_chain_end":
+                output = event["data"].get("output")
+                if isinstance(output, dict) and isinstance(output.get("messages"), list):
+                    final_messages = output["messages"]
+
+        if final_messages is not None:
+            yield f"event: done\ndata: {json.dumps({'history': _serialize_history(final_messages)}, ensure_ascii=False)}\n\n"
+        else:
+            yield "event: done\ndata: {}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
 
 
 @app.get("/health")
