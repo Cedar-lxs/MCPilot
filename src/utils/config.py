@@ -39,3 +39,6 @@ CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_data")
 
 # ─── Session Store ───────────────────────────────
 SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "./data/mcpilot.db")
+
+# ─── API Auth ────────────────────────────────────
+API_SECRET_KEY = os.getenv("API_SECRET_KEY", "")

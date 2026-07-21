@@ -1,18 +1,29 @@
 import json
+import os
 
 import httpx
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 API_URL = "http://localhost:8000"
+_API_KEY = os.getenv("API_SECRET_KEY", "")
 
 st.set_page_config(page_title="MCPilot", page_icon="", layout="wide")
 
 
 # ── 工具函数 ──────────────────────────────────────────────
 
+def _headers() -> dict:
+    if _API_KEY:
+        return {"Authorization": f"Bearer {_API_KEY}"}
+    return {}
+
+
 def api_get(path: str) -> dict | None:
     try:
-        r = httpx.get(f"{API_URL}{path}", timeout=10)
+        r = httpx.get(f"{API_URL}{path}", headers=_headers(), timeout=10)
         r.raise_for_status()
         return r.json()
     except Exception as e:
@@ -22,7 +33,7 @@ def api_get(path: str) -> dict | None:
 
 def api_post(path: str, data: dict) -> dict | None:
     try:
-        r = httpx.post(f"{API_URL}{path}", json=data, timeout=10)
+        r = httpx.post(f"{API_URL}{path}", json=data, headers=_headers(), timeout=10)
         r.raise_for_status()
         return r.json()
     except Exception as e:
@@ -32,7 +43,7 @@ def api_post(path: str, data: dict) -> dict | None:
 
 def api_delete(path: str) -> dict | None:
     try:
-        r = httpx.delete(f"{API_URL}{path}", timeout=10)
+        r = httpx.delete(f"{API_URL}{path}", headers=_headers(), timeout=10)
         r.raise_for_status()
         return r.json()
     except Exception as e:
@@ -149,6 +160,7 @@ if prompt := st.chat_input("说点什么..."):
                     "message": prompt,
                     "session_id": st.session_state.session_id,
                 },
+                headers=_headers(),
                 timeout=180,
             ) as resp:
                 resp.raise_for_status()

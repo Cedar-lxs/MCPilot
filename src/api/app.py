@@ -1,9 +1,10 @@
 import asyncio
 import json
+import secrets
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel
 
@@ -13,6 +14,7 @@ from src.mcp_client.client import MCPClient
 from src.rag.rag import _store as vector_store
 from src.rag.rag import query as rag_query
 from src.session.store import SessionStore
+from src.utils.config import API_SECRET_KEY
 from src.utils.logger_handler import logger
 from src.utils.path_tool import get_project_root
 
@@ -21,6 +23,27 @@ app = FastAPI(title="MCPilot API", version="1.0")
 PROJECT_ROOT = Path(get_project_root()).resolve()
 
 _session_store = SessionStore()
+
+# ── API Key 认证中间件 ────────────────────────────────────
+
+_EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if not API_SECRET_KEY:
+        return await call_next(request)
+
+    if request.url.path in _EXEMPT_PATHS:
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.removeprefix("Bearer ").strip()
+
+    if not secrets.compare_digest(token, API_SECRET_KEY):
+        return JSONResponse(status_code=401, content={"detail": "未授权：API Key 无效或缺失"})
+
+    return await call_next(request)
 
 
 # ── 全局生命周期 ──────────────────────────────────────────
