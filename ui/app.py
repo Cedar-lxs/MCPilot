@@ -5,30 +5,138 @@ import streamlit as st
 
 API_URL = "http://localhost:8000"
 
-st.set_page_config(page_title="MCPilot", page_icon="")
-st.title("MCPilot - 智能助手")
+st.set_page_config(page_title="MCPilot", page_icon="", layout="wide")
 
 
-# 初始化历史聊天记录
-if "history" not in st.session_state:
-    st.session_state.history = None
+# ── 工具函数 ──────────────────────────────────────────────
+
+def api_get(path: str) -> dict | None:
+    try:
+        r = httpx.get(f"{API_URL}{path}", timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.error(f"请求失败: {e}")
+        return None
+
+
+def api_post(path: str, data: dict) -> dict | None:
+    try:
+        r = httpx.post(f"{API_URL}{path}", json=data, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.error(f"请求失败: {e}")
+        return None
+
+
+def api_delete(path: str) -> dict | None:
+    try:
+        r = httpx.delete(f"{API_URL}{path}", timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.error(f"请求失败: {e}")
+        return None
+
+
+def load_session(session_id: str) -> None:
+    """从后端加载会话内容并写入 session_state。"""
+    data = api_get(f"/sessions/{session_id}")
+    if data is None:
+        return
+    st.session_state.session_id = session_id
+    st.session_state.messages = [
+        {"role": m["role"], "content": m["content"]}
+        for m in data.get("messages", [])
+        if m["role"] in ("user", "assistant")
+    ]
+
+
+def create_new_session() -> None:
+    data = api_post("/sessions", {"title": "新对话"})
+    if data:
+        st.session_state.session_id = data["id"]
+        st.session_state.messages = []
+
+
+# ── 初始化 session_state ──────────────────────────────────
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = None
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 显示已有聊天记录
+if "sessions_list" not in st.session_state:
+    st.session_state.sessions_list = []
+
+# 首次加载：获取会话列表，自动恢复或新建
+if st.session_state.session_id is None:
+    data = api_get("/sessions")
+    if data and data.get("sessions"):
+        sessions = data["sessions"]
+        st.session_state.sessions_list = sessions
+        load_session(sessions[0]["id"])
+    else:
+        create_new_session()
+
+
+# ── 侧边栏：会话管理 ──────────────────────────────────────
+
+with st.sidebar:
+    st.title("MCPilot")
+
+    if st.button("+ 新建会话", use_container_width=True):
+        create_new_session()
+        st.rerun()
+
+    st.divider()
+    st.caption("最近会话")
+
+    data = api_get("/sessions")
+    sessions = data.get("sessions", []) if data else []
+    st.session_state.sessions_list = sessions
+
+    for s in sessions:
+        is_current = s["id"] == st.session_state.session_id
+        label = ("▶ " if is_current else "") + s["title"]
+        if st.button(label, key=f"sess_{s['id']}", use_container_width=True):
+            if not is_current:
+                load_session(s["id"])
+                st.rerun()
+
+    st.divider()
+
+    if st.session_state.session_id and st.button(
+        "删除当前会话", use_container_width=True, type="secondary"
+    ):
+        api_delete(f"/sessions/{st.session_state.session_id}")
+        data = api_get("/sessions")
+        remaining = data.get("sessions", []) if data else []
+        if remaining:
+            load_session(remaining[0]["id"])
+        else:
+            create_new_session()
+        st.rerun()
+
+
+# ── 主区域：对话 ──────────────────────────────────────────
+
+st.title("MCPilot - 智能助手")
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 显示聊条记录
 if prompt := st.chat_input("说点什么..."):
-    # 显示用户消息
-    st.session_state.messages.append({"role": "user", "content": prompt})   
+    if st.session_state.session_id is None:
+        create_new_session()
+
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 调用后端流式接口获取回答
     with st.chat_message("assistant"):
         answer = ""
         error_msg = ""
@@ -37,7 +145,10 @@ if prompt := st.chat_input("说点什么..."):
             with httpx.stream(
                 "POST",
                 f"{API_URL}/chat/stream",
-                json={"message": prompt, "history": st.session_state.history},
+                json={
+                    "message": prompt,
+                    "session_id": st.session_state.session_id,
+                },
                 timeout=180,
             ) as resp:
                 resp.raise_for_status()
@@ -69,8 +180,9 @@ if prompt := st.chat_input("说点什么..."):
                                     first = False
                                 yield token
                             elif event_name == "done":
-                                if data.get("history"):
-                                    st.session_state.history = data["history"]
+                                returned_sid = data.get("session_id")
+                                if returned_sid:
+                                    st.session_state.session_id = returned_sid
 
                 answer = st.write_stream(token_generator())
 
@@ -89,5 +201,3 @@ if prompt := st.chat_input("说点什么..."):
             answer = error_msg
 
         st.session_state.messages.append({"role": "assistant", "content": answer})
-    
-    

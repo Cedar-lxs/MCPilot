@@ -10,8 +10,9 @@ from pydantic import BaseModel
 from src.agent.prompt import SYSTEM_PROMPT
 from src.agent.react_graph import build_graph, get_tools
 from src.mcp_client.client import MCPClient
-from src.rag.rag import query as rag_query
 from src.rag.rag import _store as vector_store
+from src.rag.rag import query as rag_query
+from src.session.store import SessionStore
 from src.utils.logger_handler import logger
 from src.utils.path_tool import get_project_root
 
@@ -19,23 +20,21 @@ app = FastAPI(title="MCPilot API", version="1.0")
 
 PROJECT_ROOT = Path(get_project_root()).resolve()
 
+_session_store = SessionStore()
 
-# ── 全局 MCP Client 生命周期 ──────────────────────────────
+
+# ── 全局生命周期 ──────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup():
-    """服务启动时建立 MCP Client 连接（复用，避免每次对话起子进程）"""
+    await _session_store.initialize()
+
     mcp = MCPClient()
     try:
         await mcp.connect()
         app.state.mcp_client = mcp
-
-        # 启动时一次建好LangGraph，复用
-        # 1. 从 MCP 获取工具列表
         tools = await get_tools(mcp)
-        # 2. 构建 LangGraph 并编译
         app.state.graph = build_graph(tools)
-        
         logger.info("MCP Client 已连接，LangGraph 已初始化")
     except Exception as e:
         logger.error(f"启动失败: {e}")
@@ -45,7 +44,6 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    """服务关闭时断开 MCP Client"""
     mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
     if mcp:
         await mcp.close()
@@ -56,11 +54,16 @@ async def shutdown():
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str | None = None
     history: list[dict] | None = None
 
 class ChatResponse(BaseModel):
     answer: str
     history: list
+    session_id: str | None = None
+
+class SessionCreateRequest(BaseModel):
+    title: str = "新对话"
 
 class RagSearchRequest(BaseModel):
     question: str
@@ -77,15 +80,21 @@ class RagQueryResponse(BaseModel):
     answer: str
 
 
-def _build_messages(req: ChatRequest) -> list[BaseMessage]:
-    """将 API 历史转换为 LangChain 消息，并确保包含系统提示。"""
+# ── 工具函数 ──────────────────────────────────────────────
+
+def _make_title(text: str, max_len: int = 30) -> str:
+    text = text.strip()
+    return text if len(text) <= max_len else text[:max_len] + "…"
+
+
+def _build_messages_from_history(history: list[dict], new_message: str) -> list[BaseMessage]:
+    """将历史记录列表转换为 LangChain 消息，确保包含系统提示。"""
     messages: list[BaseMessage] = []
-    # any(...)检查历史里有没有system消息
-    has_system = any(msg.get("role") == "system" for msg in req.history or [])
+    has_system = any(msg.get("role") == "system" for msg in history)
     if not has_system:
         messages.append(SystemMessage(content=SYSTEM_PROMPT))
 
-    for msg in req.history or []:
+    for msg in history:
         role = msg.get("role")
         content = msg.get("content", "")
         if role == "system":
@@ -93,19 +102,34 @@ def _build_messages(req: ChatRequest) -> list[BaseMessage]:
         elif role == "user":
             messages.append(HumanMessage(content=content))
         elif role == "assistant":
-            messages.append(AIMessage(content=content))
+            ai_msg = AIMessage(content=content)
+            if msg.get("tool_calls"):
+                ai_msg.tool_calls = [
+                    {
+                        "id": tc["id"],
+                        "name": tc["function"]["name"],
+                        "args": json.loads(tc["function"]["arguments"]),
+                    }
+                    for tc in msg["tool_calls"]
+                ]
+            messages.append(ai_msg)
         elif role == "tool":
             messages.append(ToolMessage(
                 content=content,
                 tool_call_id=msg.get("tool_call_id", ""),
             ))
 
-    messages.append(HumanMessage(content=req.message))
+    messages.append(HumanMessage(content=new_message))
     return messages
 
 
+def _build_messages(req: ChatRequest) -> list[BaseMessage]:
+    """从请求中构建消息列表（兼容旧接口 history 字段）。"""
+    return _build_messages_from_history(req.history or [], req.message)
+
+
 def _serialize_history(messages: list[BaseMessage]) -> list[dict]:
-    """将 LangChain 消息转换为前端可复用的历史记录。"""
+    """将 LangChain 消息序列化为 JSON 兼容的字典列表。"""
     history = []
     role_map = {"human": "user", "ai": "assistant", "system": "system", "tool": "tool"}
 
@@ -133,39 +157,101 @@ def _serialize_history(messages: list[BaseMessage]) -> list[dict]:
     return history
 
 
+async def _load_history_for_request(req: ChatRequest) -> tuple[list[dict], bool]:
+    """
+    根据请求加载历史记录。
+    返回 (history_dicts, from_db)：
+    - from_db=True 表示从数据库加载，会话必须在对话完成后写回。
+    - from_db=False 表示使用前端传来的 history（兼容旧接口）。
+    """
+    if req.session_id:
+        session = await _session_store.get_session(req.session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail=f"会话不存在: {req.session_id}")
+        msgs = await _session_store.get_messages(req.session_id)
+        return msgs, True
+    return req.history or [], False
+
+
+async def _persist_history(
+    session_id: str | None,
+    from_db: bool,
+    history_dicts: list[dict],
+    first_user_message: str,
+) -> None:
+    """将对话结果写回数据库（仅当使用 session_id 时）。"""
+    if not (session_id and from_db):
+        return
+    has_user = any(m.get("role") == "user" for m in history_dicts)
+    title = _make_title(first_user_message) if has_user else None
+    await _session_store.replace_messages(session_id, history_dicts, new_title=title)
+
+
+# ── 会话管理接口 ──────────────────────────────────────────
+
+@app.post("/sessions")
+async def create_session(req: SessionCreateRequest):
+    session = await _session_store.create_session(req.title)
+    return session
+
+
+@app.get("/sessions")
+async def list_sessions():
+    sessions = await _session_store.list_sessions()
+    return {"sessions": sessions}
+
+
+@app.get("/sessions/{session_id}")
+async def get_session(session_id: str):
+    session = await _session_store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail=f"会话不存在: {session_id}")
+    messages = await _session_store.get_messages(session_id)
+    return {**session, "messages": messages}
+
+
+@app.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    deleted = await _session_store.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"会话不存在: {session_id}")
+    return {"deleted": True, "session_id": session_id}
+
+
+# ── 聊天接口 ──────────────────────────────────────────────
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """接收用户消息，返回 Agent 回答 + 更新后的历史"""
     mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
     if not mcp:
-        return ChatResponse(answer="MCP 未连接", history=req.history)
-    
-    # 取启动时建好的Graph
+        return ChatResponse(answer="MCP 未连接", history=req.history or [], session_id=req.session_id)
+
     graph = getattr(app.state, "graph", None)
     if graph is None:
-        return ChatResponse(answer="服务器尚未就绪", history=req.history)
-    
-    langchain_messages = _build_messages(req)
+        return ChatResponse(answer="服务器尚未就绪", history=req.history or [], session_id=req.session_id)
 
-    # 4. 跑图
+    history_dicts, from_db = await _load_history_for_request(req)
+    langchain_messages = _build_messages_from_history(history_dicts, req.message)
+
     result = await graph.ainvoke({"messages": langchain_messages})
 
-    # 5. 提取答案
     answer = result["messages"][-1].content
-    history_dicts = _serialize_history(result["messages"])
+    final_history = _serialize_history(result["messages"])
 
-    return ChatResponse(answer=answer, history=history_dicts)
+    await _persist_history(req.session_id, from_db, final_history, req.message)
+
+    return ChatResponse(answer=answer, history=final_history, session_id=req.session_id)
 
 
 @app.post("/chat/stream")
 async def chat_stream(req: ChatRequest):
-    """以 SSE 持续推送模型 token，并在结束时返回完整历史。"""
     mcp: MCPClient | None = getattr(app.state, "mcp_client", None)
     graph = getattr(app.state, "graph", None)
     if not mcp or graph is None:
         raise HTTPException(status_code=503, detail="服务器尚未就绪")
 
-    langchain_messages = _build_messages(req)
+    history_dicts, from_db = await _load_history_for_request(req)
+    langchain_messages = _build_messages_from_history(history_dicts, req.message)
 
     async def generate():
         final_messages: list[BaseMessage] | None = None
@@ -184,9 +270,12 @@ async def chat_stream(req: ChatRequest):
                     final_messages = output["messages"]
 
         if final_messages is not None:
-            yield f"event: done\ndata: {json.dumps({'history': _serialize_history(final_messages)}, ensure_ascii=False)}\n\n"
+            final_history = _serialize_history(final_messages)
+            await _persist_history(req.session_id, from_db, final_history, req.message)
+            done_data = {"history": final_history, "session_id": req.session_id}
+            yield f"event: done\ndata: {json.dumps(done_data, ensure_ascii=False)}\n\n"
         else:
-            yield "event: done\ndata: {}\n\n"
+            yield f"event: done\ndata: {json.dumps({'session_id': req.session_id})}\n\n"
 
     return StreamingResponse(
         generate(),
@@ -195,29 +284,30 @@ async def chat_stream(req: ChatRequest):
     )
 
 
+# ── 健康检查 ──────────────────────────────────────────────
+
 @app.get("/health")
 async def health():
     mcp_ok = getattr(app.state, "mcp_client", None) is not None
     return {"status": "ok", "mcp_connected": mcp_ok}
 
 
+# ── RAG 接口 ──────────────────────────────────────────────
+
 @app.post("/rag/search", response_model=RagSearchResponse)
 async def rag_search(req: RagSearchRequest):
-    """只检索知识库，返回原文"""
     results = await vector_store.search(req.question, top_k=req.top_k)
     return RagSearchResponse(results=results)
 
 
 @app.post("/rag/query", response_model=RagQueryResponse)
 async def rag_query_route(req: RagQueryRequest):
-    """检索 + LLM 回答"""
     answer = await rag_query(req.question, top_k=req.top_k)
     return RagQueryResponse(answer=answer)
 
 
 @app.get("/documents")
 async def list_documents():
-    """查看知识库中所有文档（同步 ChromaDB 调用，放到线程池避免阻塞）"""
     all_data = await asyncio.to_thread(vector_store.collection.get)
     sources = set()
     for meta in all_data.get("metadatas", []):
@@ -227,7 +317,6 @@ async def list_documents():
 
 
 def _resolve_safe_path(filepath: str) -> Path:
-    """将路径解析到项目根目录内，防止任意文件读取"""
     path = Path(filepath)
     if not path.is_absolute():
         path = PROJECT_ROOT / path
@@ -244,13 +333,11 @@ def _resolve_safe_path(filepath: str) -> Path:
 
 @app.post("/documents/upload")
 async def upload_document(filepath: str):
-    """上传文件，导入知识库（仅允许项目目录内的文件）"""
     path = _resolve_safe_path(filepath)
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"文件不存在: {filepath}")
     if not path.is_file():
         raise HTTPException(status_code=400, detail=f"不是文件: {filepath}")
-
     text = await asyncio.to_thread(path.read_text, encoding="utf-8")
     ids = await vector_store.add_texts([text], source=path.name)
     return {"message": f"已导入 {len(ids)} 个文本块", "source": path.name}
@@ -258,16 +345,13 @@ async def upload_document(filepath: str):
 
 @app.delete("/documents/{source}")
 async def delete_document(source: str):
-    """删除知识库中的指定文档"""
     all_data = await asyncio.to_thread(vector_store.collection.get)
-
-    ids_to_delete = []
-    for i, meta in enumerate(all_data.get("metadatas", [])):
-        if meta and meta.get("source") == source:
-            ids_to_delete.append(all_data["ids"][i])
-
+    ids_to_delete = [
+        all_data["ids"][i]
+        for i, meta in enumerate(all_data.get("metadatas", []))
+        if meta and meta.get("source") == source
+    ]
     if not ids_to_delete:
         return {"error": f"未找到文档: {source}"}
-
     await asyncio.to_thread(vector_store.collection.delete, ids=ids_to_delete)
     return {"message": f"已删除 {len(ids_to_delete)} 个文本块", "source": source}
