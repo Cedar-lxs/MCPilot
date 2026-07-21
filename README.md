@@ -188,6 +188,7 @@ Copy-Item .env.example .env
 | `AGENT_TEMPERATURE` | Agent 温度参数 | `0.3` |
 | `SESSION_DB_PATH` | SQLite 会话数据库路径 | `./data/mcpilot.db` |
 | `CHROMA_DB_PATH` | ChromaDB 向量数据库路径 | `./chroma_data` |
+| `API_SECRET_KEY` | API 访问密钥，设置后所有请求须携带 `Authorization: Bearer <key>`，留空则关闭认证 | 空（关闭） |
 
 > `datetime_now` 和 `weather_query` 无需 API Key。`weather_query`、`web_search` 和 `url_fetch` 需要能访问互联网。
 
@@ -264,19 +265,20 @@ python -m pytest tests/test_weather.py -v         # 天气工具测试
 
 ## 技术栈
 
-| 类别 | 技术 |
-|---|---|
-| LLM | OpenAI 兼容 API / DeepSeek |
-| MCP | Model Context Protocol Python SDK |
-| Agent 编排 | LangGraph |
-| 向量数据库 | ChromaDB |
-| Embedding | DashScope 等 OpenAI 兼容 Embedding 服务 |
-| 会话持久化 | SQLite（Python 标准库 sqlite3） |
-| 后端 | FastAPI |
-| 前端 | Streamlit |
-| 异步 HTTP | httpx |
-| 网页解析 | BeautifulSoup、html2text |
-| 天气数据 | Open-Meteo |
+| 类别 | 技术 | 版本 |
+|---|---|---|
+| LLM | OpenAI 兼容 API / DeepSeek | openai==1.51.0 |
+| MCP | Model Context Protocol Python SDK | mcp==1.28.1 |
+| Agent 编排 | LangGraph | langgraph==0.4.30 |
+| LLM 封装 | LangChain OpenAI | langchain-openai |
+| 向量数据库 | ChromaDB | chromadb==0.5.0 |
+| Embedding | DashScope 等 OpenAI 兼容 Embedding 服务 | — |
+| 会话持久化 | SQLite（Python 标准库 sqlite3） | 内置 |
+| 后端 | FastAPI | fastapi==0.115.0 |
+| 前端 | Streamlit | streamlit==1.39.0 |
+| 异步 HTTP | httpx | httpx==0.27.0 |
+| 网页解析 | BeautifulSoup、html2text | bs4==4.12.3 / html2text==2025.4.15 |
+| 天气数据 | Open-Meteo | 无需 API Key |
 
 ## 项目履历
 
@@ -295,3 +297,4 @@ python -m pytest tests/test_weather.py -v         # 天气工具测试
 - 统一 LLM 客户端（RAG 和 Agent 均使用 `ChatOpenAI`），修复 ChromaDB 同步调用阻塞事件循环问题，`VectorStore` 改为模块级单例。
 - 移除 System Prompt 中的静态工具列表，改由 `bind_tools` 动态注入，避免工具信息重复。
 - 集成 SQLite 会话持久化：`SessionStore`、会话管理 CRUD API、Streamlit 会话侧边栏（新建 / 切换 / 删除），对话历史重启后可恢复。
+- 增加 API Key 认证中间件：`API_SECRET_KEY` 留空则关闭认证，设置后所有请求须携带 `Authorization: Bearer <key>`，使用 `secrets.compare_digest` 防时序攻击，`/health` 和 `/docs` 豁免认证。
