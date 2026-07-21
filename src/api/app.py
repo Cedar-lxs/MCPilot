@@ -11,7 +11,7 @@ from src.agent.prompt import SYSTEM_PROMPT
 from src.agent.react_graph import build_graph, get_tools
 from src.mcp_client.client import MCPClient
 from src.rag.rag import query as rag_query
-from src.rag.vector_store import VectorStore
+from src.rag.rag import _store as vector_store
 from src.utils.logger_handler import logger
 from src.utils.path_tool import get_project_root
 
@@ -204,8 +204,7 @@ async def health():
 @app.post("/rag/search", response_model=RagSearchResponse)
 async def rag_search(req: RagSearchRequest):
     """只检索知识库，返回原文"""
-    store = VectorStore()
-    results = await store.search(req.question, top_k=req.top_k)
+    results = await vector_store.search(req.question, top_k=req.top_k)
     return RagSearchResponse(results=results)
 
 
@@ -219,8 +218,7 @@ async def rag_query_route(req: RagQueryRequest):
 @app.get("/documents")
 async def list_documents():
     """查看知识库中所有文档（同步 ChromaDB 调用，放到线程池避免阻塞）"""
-    store = VectorStore()
-    all_data = await asyncio.to_thread(store.collection.get)
+    all_data = await asyncio.to_thread(vector_store.collection.get)
     sources = set()
     for meta in all_data.get("metadatas", []):
         if meta and "source" in meta:
@@ -254,18 +252,14 @@ async def upload_document(filepath: str):
         raise HTTPException(status_code=400, detail=f"不是文件: {filepath}")
 
     text = await asyncio.to_thread(path.read_text, encoding="utf-8")
-    store = VectorStore()
-    ids = await store.add_texts([text], source=path.name)
+    ids = await vector_store.add_texts([text], source=path.name)
     return {"message": f"已导入 {len(ids)} 个文本块", "source": path.name}
 
 
 @app.delete("/documents/{source}")
 async def delete_document(source: str):
     """删除知识库中的指定文档"""
-    store = VectorStore()
-
-    # 读取元数据（同步 ChromaDB 调用，放到线程池）
-    all_data = await asyncio.to_thread(store.collection.get)
+    all_data = await asyncio.to_thread(vector_store.collection.get)
 
     ids_to_delete = []
     for i, meta in enumerate(all_data.get("metadatas", [])):
@@ -275,5 +269,5 @@ async def delete_document(source: str):
     if not ids_to_delete:
         return {"error": f"未找到文档: {source}"}
 
-    await asyncio.to_thread(store.collection.delete, ids=ids_to_delete)
+    await asyncio.to_thread(vector_store.collection.delete, ids=ids_to_delete)
     return {"message": f"已删除 {len(ids_to_delete)} 个文本块", "source": source}
