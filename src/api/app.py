@@ -31,15 +31,16 @@ _EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    if not API_SECRET_KEY:
+    if not API_SECRET_KEY:             # 未配置则关闭认证，本地开发不受影响
         return await call_next(request)
 
-    if request.url.path in _EXEMPT_PATHS:
+    if request.url.path in _EXEMPT_PATHS:    # /health /docs 不需要认证
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization", "")
     token = auth_header.removeprefix("Bearer ").strip()
 
+    # 防时序攻击，使用 secrets.compare_digest 做常量时间比较，防止时序侧信道攻击
     if not secrets.compare_digest(token, API_SECRET_KEY):
         return JSONResponse(status_code=401, content={"detail": "未授权：API Key 无效或缺失"})
 

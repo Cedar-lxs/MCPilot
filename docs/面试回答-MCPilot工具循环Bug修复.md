@@ -51,8 +51,8 @@ if message.content is None or message.content == "":
 ### Q2：你提到的"团队后来参考了这个思路"，是发生在什么场景？
 > （如果有实际场景就说。如果没有，可以诚实说：这个项目是我个人项目，但在做技术分享时把文档发给了组里其他做 Agent 的同事，后来他们在处理类似问题时少踩了一个坑。）
 
-### Q3：为什么不改用更成熟的框架比如 LangChain 的 Agent 实现？
-> LangChain 的 AgentExecutor 确实有内置的循环检测，但当时选型时我的目标是深入理解 Agent 的工作原理，而不是做一个黑盒集成。自己实现一次 ReAct 循环后，我对消息结构、工具调用链路、模型行为边界都有了更深的理解，这种知识迁移到任何框架里都能用。
+### Q3：为什么后来改用 LangGraph？
+> 手写 ReAct 循环让我理解了消息结构、工具调用和循环控制的底层机制；但在工程化阶段，图结构更适合表达 Agent 与工具之间的状态流转。因此当前项目已使用 LangGraph 统一编排 ReAct 流程，降低了重复循环实现带来的维护成本。
 
 ---
 
@@ -114,11 +114,9 @@ MCP Client（在你的代码里）
 
 用 MCP 的好处是：你不需要手写 `get_definition()` 和 `if name == "xxx"` 的分支逻辑。
 
-#### 为什么不直接用 MCP？
+#### 为什么改用 MCP？
 
-我项目的目录叫 `mcp_server/`，但实际没走 MCP 协议。因为我只有三个工具，都在同一个项目里，Function Calling 直接手写够用了。MCP 的好处在于多服务、热插拔、跨语言，等真需要这些的时候再上不迟。
-
-而且两者不冲突——MCP Client 自动生成 tools 参数，Function Calling 让模型决定调不调，可以一起用。
+当前项目已使用 MCP Server-Client 架构管理工具：Server 负责注册与执行工具，Client 在启动时发现工具；LangGraph 再将这些工具绑定到模型并编排调用循环。这样工具管理、模型决策与 Agent 流程各自解耦。
 
 #### 一句话总结
 
@@ -137,8 +135,8 @@ MCP Client（在你的代码里）
 #### Q5：MCP 解决了什么实际问题？
 > 解决的是"工具多了怎么办"的问题。如果你的 Agent 只有 3 个工具，手写 `get_definition()` 很轻松。但如果有 30 个工具、来自不同的服务、需要动态增减，手写就炸了。MCP 的 Server-Client 架构让工具管理和模型调用解耦。
 
-#### Q6：如果现在让你把 MCPilot 切到真正的 MCP，怎么改？
-> 两步：1) 把 `mcp_server/tools/` 包成一个真正的 MCP Server 进程，走 JSON-RPC over stdio；2) 在 `core.py` 里接入 MCP Client SDK，用它代替手写的 `_build_tool_definitions()` 和 `_execute_tool()`。核心的 ReAct 循环不用动，换的是工具注册和执行那两层。
+#### Q6：如果现在让你说明 MCPilot 的工具调用链路？
+> MCP Server 通过 stdio 暴露工具定义和调用接口；MCP Client 连接并发现工具；`react_graph.py` 将其转换为 LangChain 工具并绑定给模型；LangGraph 负责在 Agent 节点和工具节点之间循环，直到得到最终回答。
 
 ---
 

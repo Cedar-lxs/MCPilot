@@ -20,6 +20,7 @@ llm = ChatOpenAI(
     base_url=OPENAI_BASE_URL,
     temperature=AGENT_TEMPERATURE,
     max_tokens=LLM_MAX_TOKENS,
+    streaming=True,
 )
 
 

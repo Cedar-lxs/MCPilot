@@ -8,7 +8,7 @@ from src.agent.react_graph import build_graph, get_tools
 from src.mcp_client.client import MCPClient
 
 
-async def test():
+async def run():
     mcp = MCPClient()
     try:
         await mcp.connect()
@@ -39,4 +39,4 @@ async def test():
 
 
 if __name__ == "__main__":
-    asyncio.run(test())
+    asyncio.run(run())
