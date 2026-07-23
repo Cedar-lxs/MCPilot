@@ -5,6 +5,8 @@
 import os
 from dotenv import load_dotenv
 
+from src.utils.path_tool import get_project_root
+
 load_dotenv(override=True)
 
 
@@ -44,6 +46,12 @@ SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "./data/mcpilot.db")
 BOCHA_API_KEY = os.getenv("BOCHA_API_KEY", "")
 SEARCH_TIMEOUT_SECONDS = _float("SEARCH_TIMEOUT_SECONDS", 10.0)
 SEARCH_MAX_RESULTS = _int("SEARCH_MAX_RESULTS", 10)
+
+# ─── File System Tool ────────────────────────────
+FILE_SYSTEM_ROOT = os.getenv("FILE_SYSTEM_ROOT", get_project_root())
+FILE_SYSTEM_MAX_READ_CHARS = _int("FILE_SYSTEM_MAX_READ_CHARS", 10000)
+FILE_SYSTEM_MAX_WRITE_CHARS = _int("FILE_SYSTEM_MAX_WRITE_CHARS", 10000)
+FILE_SYSTEM_MAX_LIST_ENTRIES = _int("FILE_SYSTEM_MAX_LIST_ENTRIES", 100)
 
 # ─── API Auth ────────────────────────────────────
 API_SECRET_KEY = os.getenv("API_SECRET_KEY", "")

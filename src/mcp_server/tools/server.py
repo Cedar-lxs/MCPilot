@@ -20,6 +20,7 @@ try:
     from .datetime_tool import DateTimeTool
     from .url_fetch import UrlFetchTool
     from .weather import WeatherTool
+    from .file_system import FileSystemTool
 except ImportError:
     from src.mcp_server.tools.calculator import Calculator
     from src.mcp_server.tools.note import NoteTool
@@ -28,6 +29,7 @@ except ImportError:
     from src.mcp_server.tools.datetime_tool import DateTimeTool
     from src.mcp_server.tools.url_fetch import UrlFetchTool
     from src.mcp_server.tools.weather import WeatherTool
+    from src.mcp_server.tools.file_system import FileSystemTool
 
 # 创建MCP实例
 app = Server("MCPilot")
@@ -42,6 +44,7 @@ _TOOLS: list = [
     DateTimeTool(), 
     UrlFetchTool(),
     WeatherTool(),
+    FileSystemTool(),
 ]
 
 

@@ -35,7 +35,8 @@ src/
 │       ├── rag_tool.py            ← 本地知识库检索
 │       ├── datetime_tool.py       ← 当前真实日期时间
 │       ├── url_fetch.py           ← 安全获取公开网页内容
-│       └── weather.py             ← Open-Meteo 天气查询
+│       ├── weather.py             ← Open-Meteo 天气查询
+│       └── file_system.py         ← 受限项目目录文件操作
 │
 ├── rag/                           ← RAG 知识库
 │   ├── chunk.py                   ← 文本分块
@@ -74,6 +75,19 @@ tests/                             ← 单元测试与集成测试
 | `SEARCH_MAX_RESULTS` | 每次请求和工具参数允许的最大结果数 | `10` |
 
 博查 AI 按套餐配额和请求量计费。请在部署前确认账户套餐、密钥权限和可用配额；密钥只应保存在 `.env` 或部署环境变量中，切勿提交到仓库。
+
+## 文件系统工具配置
+
+`file_system` 默认只能操作项目根目录内的常见 UTF-8 文本文件。可选配置如下：
+
+| 变量 | 说明 | 默认值 |
+|---|---|---|
+| `FILE_SYSTEM_ROOT` | 文件操作根目录；应设置为项目目录内的专用工作目录 | 项目根目录 |
+| `FILE_SYSTEM_MAX_READ_CHARS` | 单次读取最大字符数 | `10000` |
+| `FILE_SYSTEM_MAX_WRITE_CHARS` | 单次写入或追加最大字符数 | `10000` |
+| `FILE_SYSTEM_MAX_LIST_ENTRIES` | 目录列表最大条目数 | `100` |
+
+工具支持 `list`、`read`、`mkdir`、`write` 和 `append`，不支持删除、移动或重命名。它拒绝绝对路径、路径穿越、符号链接、`.env`、`.git`、缓存目录及常见私钥/凭据文件；写入仅允许白名单内的常见文本扩展名。
 
 ## API 接口
 
@@ -118,11 +132,12 @@ tests/                             ← 单元测试与集成测试
 |---|---|---|
 | `calculator` | 安全执行基础数学表达式 | `expression` |
 | `note_take` | 写入、读取、列出或删除临时笔记 | `action`、`key`、`content` |
-| `web_search` | 使用 Bing 搜索互联网最新信息 | `query`、`max_results`、`freshness` |
+| `web_search` | 使用博查 AI 搜索互联网最新信息 | `query`、`max_results`、`freshness` |
 | `rag_query` | 检索本地知识库并返回相关内容 | `question` |
 | `datetime_now` | 获取真实当前日期、时间或 Unix 时间戳 | `format`、`timezone` |
 | `url_fetch` | 获取并清理公开 HTTP/HTTPS 网页内容 | `url`、`max_length`、`output_format`、`timeout` |
 | `weather_query` | 查询城市当前天气及最多 7 天预报，无需 API Key | `location`、`forecast_days`、`temperature_unit` |
+| `file_system` | 在受限项目目录中列出、读取、创建、写入或追加常见文本文件 | `action`、`path`、`content`、`recursive`、`max_chars` |
 
 ### 日期时间工具
 
